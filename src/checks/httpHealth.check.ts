@@ -33,7 +33,7 @@ export async function httpHealthCheck(env: Env, sb: any) {
         area: "app",
         message: `APP health failed (${res.status})`,
         link: "/internal",
-        meta: { url }
+        meta: { url  url, check_name: "app_health" }
       });
       return;
     }
@@ -61,7 +61,7 @@ export async function httpHealthCheck(env: Env, sb: any) {
       area: "app",
       message: "APP health fetch failed",
       link: "/internal",
-      meta: { url }
+      meta: { url  url, check_name: "app_health" }
     });
     throw e;
   }
