@@ -49,3 +49,74 @@ export async function writeAlert(params: {
   });
   if (error) throw error;
 }
+
+export async function isCheckStable(params: {
+  sb: ReturnType<typeof getSupabase>;
+  orgId: string;
+  checkName: string;
+}) {
+  const { sb, orgId, checkName } = params;
+  const sinceIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data, error } = await sb
+    .from("ops_health_checks")
+    .select("status,created_at")
+    .eq("org_id", orgId)
+    .eq("check_name", checkName)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(3);
+  if (error) throw error;
+  const statuses = (data ?? []).map((r) => r.status);
+  // Inteligencia: mínimo 2 resultados y ambos ok, y ninguno warn/fail
+  if (statuses.length < 2) return false;
+  if (statuses.some((s) => s !== "ok")) return false;
+  return true;
+}
+
+export async function autoResolveAlertsForCheck(params: {
+  sb: ReturnType<typeof getSupabase>;
+  orgId: string;
+  checkName: string;
+}) {
+  const { sb, orgId, checkName } = params;
+  // Resolve: solo las NO resueltas y asociadas a ese check (meta.check_name)
+  // También acepta fallback por área para alertas antiguas sin meta.
+  const areaMap: Record<string, string> = {
+    app_health: "app",
+    room_gate: "room",
+    supabase_ping: "supabase",
+  };
+  const area = areaMap[checkName];
+  // 1) Resolver por meta.check_name (modo correcto)
+  await sb
+    .from("ops_alerts")
+    .update({
+      resolved: true,
+      resolved_at: new Date().toISOString(),
+      meta: {
+        auto_resolved: true,
+        resolved_by: "qa-worker",
+        check_name: checkName,
+      },
+    })
+    .eq("org_id", orgId)
+    .eq("resolved", false)
+    .contains("meta", { check_name: checkName });
+  // 2) Fallback: si hay alertas viejas sin meta, resolver por area
+  if (area) {
+    await sb
+      .from("ops_alerts")
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+        meta: {
+          auto_resolved: true,
+          resolved_by: "qa-worker",
+          check_name: checkName,
+        },
+      })
+      .eq("org_id", orgId)
+      .eq("resolved", false)
+      .eq("area", area);
+  }
+}
