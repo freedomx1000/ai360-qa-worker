@@ -37,7 +37,7 @@ export async function roomGateCheck(env: Env, sb: any) {
         area: "room",
         message: "ROOM routes returning 5xx",
         link: "/room",
-        meta: { roomUrl, thresholdUrl }
+        meta: { roomUrl, thresholdUrl  roomUrl, thresholdUrl, check_name: "room_gate" }
       });
       return;
     }
